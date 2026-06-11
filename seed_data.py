@@ -12,6 +12,7 @@ as a live trace, so the demo stays honest to the scoring logic.
 from __future__ import annotations
 
 import os
+from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
@@ -298,12 +299,88 @@ fictional, created solely for portfolio demonstration purposes.
 GhostTrace — Hidden Ownership & Shell Company Tracer — DEMONSTRATION ONLY"""
 
 
+SEED_DEEP_TRACE = {
+    "tool_calls_used": 3,
+    "max_calls": 5,
+    "tool_call_log": [
+        {
+            "tool": "search_cached_filings",
+            "input": {"query": "Calloway Nominee Services beneficial owner"},
+            "result_preview": "Found DEMO-13D-002: 'Calloway Nominee Services Ltd as nominee — identity of beneficial owner not disclosed'",
+        },
+        {
+            "tool": "search_cached_filings",
+            "input": {"query": "Pelican Trust Services Meridian Holdings ownership"},
+            "result_preview": "Found DEMO-13D-001: 'Meridian is a wholly owned subsidiary of Pelican Trust Services Ltd'",
+        },
+        {
+            "tool": "investigate_entity",
+            "input": {"entity_name": "Shenzhen Brightway Industrial"},
+            "result_preview": "{'status': 'not_found', 'entity_name': 'Shenzhen Brightway Industrial'}",
+        },
+    ],
+    "synthesis": """DEEP TRACE SYNTHESIS — Harborview Capital Partners LP
+(3/5 tool calls used)
+
+INVESTIGATION SUMMARY
+
+I targeted the two highest-risk nodes in the ownership chain — Calloway Nominee
+Services Ltd and Shenzhen Brightway Industrial Co Ltd — searching cached filings
+for additional evidence and checking whether Brightway appears as an independent
+SEC registrant.
+
+FINDINGS FROM CACHED FILINGS
+
+1. Calloway Nominee Services Ltd (Cayman Islands):
+   The SC 13D Amendment No. 1 confirms Calloway holds Pelican Trust's shares
+   purely as nominee. The filing states explicitly that "the identity of the
+   beneficial owner or owners for whom Calloway holds such shares has not been
+   disclosed." Calloway disclaim beneficial ownership except to the extent of any
+   pecuniary interest — standard nominee language. No subsequent amendment
+   supplements this disclosure. The natural person(s) controlling the chain above
+   Calloway remain unknown in the public record.
+
+2. Pelican Trust Services / Meridian Holdings chain:
+   Confirmed single-chain structure with no additional owners disclosed across any
+   cached filing. Pelican wholly owns Meridian; Meridian controls 64% of Harborview.
+   The chain was constructed no later than the original 13D filing date (March 2026).
+
+3. Shenzhen Brightway Industrial Co Ltd:
+   Not found as an SEC registrant. The entity does not file independently, which
+   is consistent with a passive minority stake. Its 11% position is disclosed only
+   through Harborview's own 13G. Brightway's corporate ownership structure, Chinese
+   regulatory filings, and any PRC government or military connections are not
+   assessable from the US public filing record alone.
+
+RISK ESCALATION ASSESSMENT
+
+The initial HIGH / 100 risk score is confirmed. No finding from this Deep Trace
+reduces the risk level.
+
+The primary unresolved risk is the deliberate opacity of the Calloway chain. This
+is not a disclosure gap — it is an intentionally nominee-structured arrangement.
+The Chinese minority stake independently warrants investigation outside of what
+US public filings can surface.
+
+RECOMMENDED NEXT STEPS (in priority order):
+1. Request beneficial ownership disclosure from Calloway Nominee Services Ltd
+   via a formal inquiry or legal process.
+2. Search Chinese commercial registries (SAMR / GSXT) for Shenzhen Brightway
+   Industrial's ultimate shareholders and government connections.
+3. Pull historical 13D/A amendments to establish the timeline of offshore chain
+   construction relative to Harborview's fundraising activity.
+
+[DEMONSTRATION — all entities, companies, and filing references are fictional]""",
+}
+
+
 def load_seed_data(db: Session) -> dict:
     if db.query(Trace).filter_by(company_name="Harborview Capital Partners LP").first():
         return {"status": "already_loaded"}
 
     # Score with the real engine so the demo reflects actual rule behavior
     result = assess(SEED_ENTITIES, SEED_LINKS, "Harborview Capital Partners LP")
+    _now = datetime.now(timezone.utc).replace(tzinfo=None)
 
     trace = Trace(
         company_name="Harborview Capital Partners LP",
@@ -314,9 +391,13 @@ def load_seed_data(db: Session) -> dict:
         headline=SEED_HEADLINE,
         summary=SEED_SUMMARY,
         full_text=SEED_FULL_TEXT,
+        ofac_checked_at=_now,
+        deep_trace_ran_at=_now,
     )
     trace.findings = result["findings"]
     trace.key_findings = SEED_KEY_FINDINGS
+    trace.ofac_hits = []          # fictional entities produce no SDN matches
+    trace.deep_trace = SEED_DEEP_TRACE
     db.add(trace)
     db.flush()
 
